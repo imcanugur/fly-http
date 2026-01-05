@@ -337,14 +337,40 @@ git commit -m "feat!: remove deprecated API"
 
 ### Automatic Versioning
 
-#### GitHub Actions (CI/CD)
-When you push to the `main` branch, GitHub Actions automatically:
-- Analyzes commit messages using conventional commits
-- Bumps version number
-- Updates CHANGELOG.md
-- Creates Git tags
-- Publishes GitHub releases
-- Updates Packagist
+#### GitHub Actions (CI/CD) - Composite Actions
+When you push to the `main` branch, GitHub Actions uses custom composite actions:
+
+```yaml
+# Uses ./.github/actions/version-bump
+# Uses ./.github/actions/create-tag
+# Uses ./.github/actions/packagist-update
+```
+
+**Process:**
+1. **Version Bump Action**: Analyzes conventional commits → determines version bump
+2. **Create Tag Action**: Updates files, commits changes, creates git tag
+3. **Packagist Update Action**: Triggers Packagist package update
+
+#### Using Composite Actions Manually
+You can also use the actions in other workflows:
+
+```yaml
+- name: Bump version
+  uses: ./.github/actions/version-bump
+  with:
+    bump_type: auto
+
+- name: Create tag
+  uses: ./.github/actions/create-tag
+  with:
+    version: ${{ steps.bump.outputs.new_version }}
+
+- name: Update Packagist
+  uses: ./.github/actions/packagist-update
+  with:
+    api_token: ${{ secrets.PACKAGIST_API_TOKEN }}
+    username: imcanugur
+```
 
 #### Local Development (CI-Independent)
 For local development or other CI systems, use the release script:

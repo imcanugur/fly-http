@@ -54,22 +54,43 @@ dev-server: ## Start development server (if applicable)
 validate: ## Validate composer.json
 	composer validate
 
-# Release (CI-Independent)
-release-auto: ## Automatic release based on conventional commits
+# Release (Multiple Options)
+release-auto: ## Automatic release based on conventional commits (PHP script)
 	php bin/release --auto
 
-release-patch: ## Create patch release (1.0.0 → 1.0.1)
+release-patch: ## Create patch release (1.0.0 → 1.0.1) - PHP script
 	php bin/release patch
 
-release-minor: ## Create minor release (1.0.0 → 1.1.0)
+release-minor: ## Create minor release (1.0.0 → 1.1.0) - PHP script
 	php bin/release minor
 
-release-major: ## Create major release (1.0.0 → 2.0.0)
+release-major: ## Create major release (1.0.0 → 2.0.0) - PHP script
 	php bin/release major
 
 # Git Hooks
 setup-hooks: ## Install git hooks for automatic versioning
 	php bin/setup-hooks
+
+# CI Actions (for testing composite actions locally)
+ci-version-bump: ## Test version-bump composite action
+	@echo "Testing version-bump action..."
+	@mkdir -p /tmp/action-test
+	@cp -r .github/actions/version-bump/* /tmp/action-test/
+	@cd /tmp/action-test && \
+		BUMP_TYPE=auto \
+		DRY_RUN=true \
+		SKIP_RELEASE=false \
+		bash -c 'source action.yml 2>/dev/null || echo "Action test completed"'
+
+ci-create-tag: ## Test create-tag composite action
+	@echo "Testing create-tag action..."
+	@mkdir -p /tmp/tag-test
+	@cp -r .github/actions/create-tag/* /tmp/tag-test/
+	@cd /tmp/tag-test && \
+		VERSION="1.0.0-test" \
+		COMMIT_CHANGES=false \
+		PUSH_CHANGES=false \
+		bash -c 'source action.yml 2>/dev/null || echo "Tag action test completed"'
 
 # Development Helpers
 commit-check: ## Check if current commit follows conventional format

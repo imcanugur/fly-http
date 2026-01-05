@@ -106,78 +106,20 @@ jobs:
     - name: Run tests
       run: ./vendor/bin/phpunit
 
-    - name: Determine version bump
+    # Use the custom version-bump composite action
+    - name: Bump version
       id: version
-      run: |
-        # Get last tag
-        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        LAST_VERSION=${LAST_TAG#v}
+      uses: ./.github/actions/version-bump
+      with:
+        bump_type: auto
 
-        # Parse version
-        IFS='.' read -ra VERSION_PARTS <<< "$LAST_VERSION"
-        MAJOR=${VERSION_PARTS[0]}
-        MINOR=${VERSION_PARTS[1]}
-        PATCH=${VERSION_PARTS[2]}
-
-        # Get commits since last tag
-        COMMITS_SINCE_TAG=$(git rev-list $LAST_TAG..HEAD --count 2>/dev/null || echo "1")
-
-        if [ "$COMMITS_SINCE_TAG" -eq 0 ]; then
-          echo "No new commits since last tag. Skipping release."
-          echo "skip_release=true" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-
-        # Determine bump type based on conventional commits
-        BUMP_TYPE="patch"  # default
-
-        # Check for major changes (breaking changes)
-        if git log $LAST_TAG..HEAD --oneline | grep -q "BREAKING CHANGE\|feat!:\|fix!:\|refactor!:"; then
-          BUMP_TYPE="major"
-        # Check for minor changes (new features)
-        elif git log $LAST_TAG..HEAD --oneline | grep -q "^feat:"; then
-          BUMP_TYPE="minor"
-        # Check for patch changes (fixes)
-        elif git log $LAST_TAG..HEAD --oneline | grep -q "^fix:\|^perf:"; then
-          BUMP_TYPE="patch"
-        fi
-
-        # Calculate new version
-        case $BUMP_TYPE in
-          major)
-            NEW_MAJOR=$((MAJOR + 1))
-            NEW_VERSION="$NEW_MAJOR.0.0"
-            ;;
-          minor)
-            NEW_MINOR=$((MINOR + 1))
-            NEW_VERSION="$MAJOR.$NEW_MINOR.0"
-            ;;
-          patch)
-            NEW_PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-            ;;
-        esac
-
-        echo "Last version: $LAST_VERSION"
-        echo "New version: $NEW_VERSION"
-        echo "Bump type: $BUMP_TYPE"
-        echo "Commits since last tag: $COMMITS_SINCE_TAG"
-
-        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-        echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
-        echo "skip_release=false" >> $GITHUB_OUTPUT
-        echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-
-    - name: Update version in composer.json
+    # Create tag and commit changes using custom composite action
+    - name: Create release tag
       if: steps.version.outputs.skip_release == 'false'
-      run: |
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${{ steps.version.outputs.new_version }}\"/" composer.json
-
-    - name: Update CHANGELOG.md
-      if: steps.version.outputs.skip_release == 'false'
-      run: |
-        DATE=$(date +%Y-%m-%d)
-        sed -i "1a ## [${{ steps.version.outputs.new_version }}] - $DATE\n\n### ${{ steps.version.outputs.bump_type == 'major' && 'Changed' || steps.version.outputs.bump_type == 'minor' && 'Added' || 'Fixed' }}\n- ${{ steps.version.outputs.bump_type }} version bump\n" CHANGELOG.md
+      id: tag
+      uses: ./.github/actions/create-tag
+      with:
+        version: ${{ steps.version.outputs.new_version }}
 
     - name: Create release archive
       if: steps.version.outputs.skip_release == 'false'
@@ -185,58 +127,27 @@ jobs:
         mkdir -p dist
         composer archive --format=zip --file=fly-http
 
-    - name: Commit version bump
-      if: steps.version.outputs.skip_release == 'false'
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add composer.json CHANGELOG.md
-        git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" || echo "No changes to commit"
-
-    - name: Create Git tag
-      if: steps.version.outputs.skip_release == 'false'
-      run: |
-        git tag -a "v${{ steps.version.outputs.new_version }}" -m "Release version ${{ steps.version.outputs.new_version }}"
-
-    - name: Push changes and tags
-      if: steps.version.outputs.skip_release == 'false'
-      run: |
-        git push origin main
-        git push origin "v${{ steps.version.outputs.new_version }}"
-
-    - name: Generate changelog
-      if: steps.version.outputs.skip_release == 'false'
-      id: changelog
-      run: |
-        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~1")
-        CHANGELOG=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD | cat)
-        echo "changelog<<EOF" >> $GITHUB_OUTPUT
-        echo "## Changes" >> $GITHUB_OUTPUT
-        echo "$CHANGELOG" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...v${{ steps.version.outputs.new_version }}" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
+    # Create GitHub release
     - name: Create GitHub Release
       if: steps.version.outputs.skip_release == 'false'
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ steps.version.outputs.new_version }}
+        tag_name: ${{ steps.tag.outputs.tag_name }}
         release_name: Release v${{ steps.version.outputs.new_version }}
-        body: ${{ steps.changelog.outputs.changelog }}
+        body: ${{ steps.version.outputs.changelog }}
         draft: false
         prerelease: false
 
+    # Update Packagist using custom composite action
     - name: Update Packagist
       if: steps.version.outputs.skip_release == 'false'
-      run: |
-        # Trigger Packagist update via webhook
-        curl -X POST "https://packagist.org/api/update-package?username=imcanugur&apiToken=${{ secrets.PACKAGIST_API_TOKEN }}" \
-             -H "Content-Type: application/json" \
-             -d "{\"repository\":{\"url\":\"https://github.com/${{ github.repository }}\"}}" \
-             || echo "Packagist update triggered (may take a few minutes)"
+      uses: ./.github/actions/packagist-update
+      with:
+        api_token: ${{ secrets.PACKAGIST_API_TOKEN }}
+        username: imcanugur
+        package_name: fly-http
 
     - name: Upload release artifacts
       if: steps.version.outputs.skip_release == 'false'

@@ -1,0 +1,105 @@
+name: 'Create Release Tag'
+description: 'Create git tag and commit version changes'
+inputs:
+  version:
+    description: 'Version to tag (without v prefix)'
+    required: true
+  commit_changes:
+    description: 'Whether to commit version file changes'
+    required: false
+    default: 'true'
+  push_changes:
+    description: 'Whether to push commits and tags'
+    required: false
+    default: 'true'
+outputs:
+  tag_name:
+    description: 'The created tag name'
+    value: ${{ steps.tag.outputs.tag_name }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure Git
+      if: inputs.commit_changes == 'true' || inputs.push_changes == 'true'
+      shell: bash
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+
+    - name: Check for uncommitted changes
+      id: changes
+      shell: bash
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "📝 Found uncommitted changes:"
+          git status --porcelain
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "✅ No uncommitted changes"
+        fi
+
+    - name: Commit version changes
+      if: inputs.commit_changes == 'true' && steps.changes.outputs.has_changes == 'true'
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        git add composer.json CHANGELOG.md
+        if git commit -m "Bump version to $VERSION"; then
+          echo "✅ Committed version bump to $VERSION"
+        else
+          echo "⚠️  No changes to commit or commit failed"
+        fi
+
+    - name: Create git tag
+      id: tag
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        TAG_NAME="v$VERSION"
+
+        # Check if tag already exists
+        if git tag -l | grep -q "^$TAG_NAME$"; then
+          echo "⚠️  Tag $TAG_NAME already exists"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Create annotated tag
+        git tag -a "$TAG_NAME" -m "Release version $VERSION"
+        echo "🏷️ Created tag: $TAG_NAME"
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+    - name: Push changes and tags
+      if: inputs.push_changes == 'true'
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        TAG_NAME="v$VERSION"
+
+        echo "📤 Pushing to remote repository..."
+
+        # Push commits if there were changes
+        if [ "${{ steps.changes.outputs.has_changes }}" = "true" ]; then
+          git push origin HEAD
+          echo "✅ Pushed commits"
+        fi
+
+        # Push tag
+        git push origin "$TAG_NAME"
+        echo "✅ Pushed tag: $TAG_NAME"
+
+    - name: Summary
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        TAG_NAME="${{ steps.tag.outputs.tag_name }}"
+
+        echo "🎉 Release preparation complete!"
+        echo "📦 Version: $VERSION"
+        echo "🏷️  Tag: $TAG_NAME"
+        echo ""
+        echo "Next steps (if not automated):"
+        echo "• Create GitHub release: https://github.com/${{ github.repository }}/releases/new"
+        echo "• Tag: $TAG_NAME"
+        echo "• Title: Release v$VERSION"

@@ -1,0 +1,93 @@
+name: 'Update Packagist'
+description: 'Trigger Packagist package update'
+inputs:
+  api_token:
+    description: 'Packagist API token'
+    required: true
+  username:
+    description: 'Packagist username'
+    required: true
+  package_name:
+    description: 'Package name (vendor/package format)'
+    required: false
+    default: ${{ github.event.repository.name }}
+  repository_url:
+    description: 'Repository URL'
+    required: false
+    default: ${{ github.event.repository.html_url }}
+  timeout:
+    description: 'Request timeout in seconds'
+    required: false
+    default: '30'
+outputs:
+  success:
+    description: 'Whether the update was successful'
+    value: ${{ steps.update.outputs.success }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Update Packagist
+      id: update
+      shell: bash
+      run: |
+        API_TOKEN="${{ inputs.api_token }}"
+        USERNAME="${{ inputs.username }}"
+        PACKAGE_NAME="${{ inputs.package_name }}"
+        REPOSITORY_URL="${{ inputs.repository_url }}"
+        TIMEOUT="${{ inputs.timeout }}"
+
+        echo "📦 Updating Packagist package: $USERNAME/$PACKAGE_NAME"
+        echo "🔗 Repository: $REPOSITORY_URL"
+
+        # Prepare JSON payload
+        PAYLOAD=$(cat <<EOF
+        {
+          "repository": {
+            "url": "$REPOSITORY_URL"
+          }
+        }
+        EOF
+        )
+
+        echo "📤 Sending update request to Packagist..."
+
+        # Make API request
+        RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -H "User-Agent: GitHub-Actions-Packagist-Update" \
+          -u "$USERNAME:$API_TOKEN" \
+          --max-time "$TIMEOUT" \
+          -d "$PAYLOAD" \
+          "https://packagist.org/api/update-package?username=$USERNAME")
+
+        # Extract HTTP status
+        HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+        RESPONSE_BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+
+        echo "📥 Response status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" = "202" ]; then
+          echo "✅ Packagist update triggered successfully"
+          echo "success=true" >> $GITHUB_OUTPUT
+        elif [ "$HTTP_STATUS" = "200" ]; then
+          echo "✅ Packagist update completed"
+          echo "success=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Packagist update failed"
+          echo "Response: $RESPONSE_BODY"
+          echo "success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        echo "⏱️  Packagist updates typically take 1-5 minutes to reflect"
+
+    - name: Wait for Packagist sync
+      shell: bash
+      run: |
+        PACKAGE_NAME="${{ inputs.package_name }}"
+        echo "⏳ Waiting for Packagist to sync..."
+        echo "Check status: https://packagist.org/packages/$USERNAME/$PACKAGE_NAME"
+
+        # Optional: Add a small delay to allow Packagist to process
+        sleep 10
