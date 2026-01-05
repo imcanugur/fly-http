@@ -1,6 +1,7 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "imcanugur/fly-http",
+    "version": "1.0.0",
     "type": "library",
     "description": "PSR-18 compliant, middleware-based HTTP client library for enterprise applications",
     "keywords": ["http", "client", "psr-18", "middleware", "enterprise", "guzzle"],
@@ -8,9 +9,16 @@
     "authors": [
         {
             "name": "Can Ugur",
-            "email": "imcanugur@gmail.com"
+            "email": "me@canugur.tr",
+            "homepage": "https://github.com/imcanugur",
+            "role": "Developer"
         }
     ],
+    "homepage": "https://github.com/imcanugur/fly-http",
+    "support": {
+        "issues": "https://github.com/imcanugur/fly-http/issues",
+        "source": "https://github.com/imcanugur/fly-http"
+    },
     "require": {
         "php": "^8.2",
         "psr/http-client": "^1.0",
