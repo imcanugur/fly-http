@@ -310,11 +310,70 @@ composer require imcanugur/fly-http
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure PSR standards compliance
-5. Submit a pull request
+We welcome contributions! If you have a feature idea or a bug fix:
+
+1. **Fork** the repository.
+2. Create a new **branch** (`git checkout -b feature/YourFeature`).
+3. **Commit** your changes using [Conventional Commits](.github/workflows/conventional-commits.md).
+4. **Push** to the branch.
+5. Open a **Pull Request**.
+
+For bugs and suggestions, please **[open an issue](https://github.com/imcanugur/fly-http/issues)**.
+
+### Commit Convention
+
+This project uses [Conventional Commits](https://conventionalcommits.org/) for automatic versioning:
+
+```bash
+# Feature (minor version bump)
+git commit -m "feat: add new middleware"
+
+# Bug fix (patch version bump)
+git commit -m "fix: resolve memory leak"
+
+# Breaking change (major version bump)
+git commit -m "feat!: remove deprecated API"
+```
+
+### Automatic Versioning
+
+#### GitHub Actions (CI/CD)
+When you push to the `main` branch, GitHub Actions automatically:
+- Analyzes commit messages using conventional commits
+- Bumps version number
+- Updates CHANGELOG.md
+- Creates Git tags
+- Publishes GitHub releases
+- Updates Packagist
+
+#### Local Development (CI-Independent)
+For local development or other CI systems, use the release script:
+
+```bash
+# Setup git hooks for automatic release prompts
+php bin/setup-hooks
+
+# Manual release commands
+php bin/release --auto     # Auto-determine version bump
+php bin/release patch      # Manual patch bump (1.0.0 → 1.0.1)
+php bin/release minor      # Manual minor bump (1.0.0 → 1.1.0)
+php bin/release major      # Manual major bump (1.0.0 → 2.0.0)
+
+# Git hooks will prompt for releases on main branch commits
+git add .
+git commit -m "feat: add new middleware"
+# Hook will ask: "Trigger automatic release?"
+```
+
+#### Conventional Commits
+The system uses [Conventional Commits](https://conventionalcommits.org/) specification:
+
+```bash
+feat: add new feature          # → minor version bump
+fix: resolve bug               # → patch version bump
+feat!: breaking change         # → major version bump
+docs: update docs             # → no version bump
+```
 
 ---
 

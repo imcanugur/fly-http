@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Fly HTTP Client - Git Hooks Setup Script
+# Installs git hooks for automatic versioning and conventional commits
+
+HOOKS_DIR=".git/hooks"
+PROJECT_HOOKS_DIR="hooks"
+
+echo "🔧 Setting up Git hooks for Fly HTTP Client..."
+echo ""
+
+# Check if we're in a git repository
+if [ ! -d ".git" ]; then
+    echo "❌ Error: Not in a git repository"
+    echo "Please run this script from the project root"
+    exit 1
+fi
+
+# Create hooks directory if it doesn't exist
+mkdir -p "$HOOKS_DIR"
+
+# Install hooks
+HOOKS=("post-commit" "prepare-commit-msg")
+
+for hook in "${HOOKS[@]}"; do
+    source_hook="$PROJECT_HOOKS_DIR/$hook"
+    target_hook="$HOOKS_DIR/$hook"
+
+    if [ -f "$source_hook" ]; then
+        echo "📋 Installing $hook hook..."
+
+        # Copy hook
+        cp "$source_hook" "$target_hook"
+
+        # Make executable
+        chmod +x "$target_hook"
+
+        echo "✅ $hook hook installed"
+    else
+        echo "⚠️  $hook hook not found in $PROJECT_HOOKS_DIR/"
+    fi
+done
+
+echo ""
+echo "🎉 Git hooks setup complete!"
+echo ""
+echo "Now when you commit to main branch:"
+echo "• prepare-commit-msg will check conventional commit format"
+echo "• post-commit will offer to create automatic releases"
+echo ""
+echo "To skip release for a commit, include [skip release] in message"
+echo ""
+echo "Manual release commands:"
+echo "  php bin/release --auto    # Auto-determine version bump"
+echo "  php bin/release patch     # Manual patch bump"
+echo "  php bin/release minor     # Manual minor bump"
+echo "  php bin/release major     # Manual major bump"

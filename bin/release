@@ -1,0 +1,281 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Fly HTTP Client - Automatic Release Script
+ *
+ * This script automatically determines version bumps based on conventional commits,
+ * updates files, creates commits and tags, and can trigger releases.
+ *
+ * Usage: php bin/release [patch|minor|major|--auto]
+ */
+
+class AutoRelease
+{
+    private string $repoPath;
+    private string $remote = 'origin';
+    private string $mainBranch = 'main';
+
+    public function __construct()
+    {
+        $this->repoPath = realpath(__DIR__ . '/..');
+        chdir($this->repoPath);
+    }
+
+    public function run(array $args): void
+    {
+        if (empty($args)) {
+            $this->showHelp();
+            exit(1);
+        }
+
+        $command = $args[0];
+
+        switch ($command) {
+            case '--auto':
+                $this->autoRelease();
+                break;
+            case 'patch':
+            case 'minor':
+            case 'major':
+                $this->manualRelease($command);
+                break;
+            case '--help':
+            case '-h':
+                $this->showHelp();
+                break;
+            default:
+                echo "Unknown command: $command\n\n";
+                $this->showHelp();
+                exit(1);
+        }
+    }
+
+    private function showHelp(): void
+    {
+        echo "Fly HTTP Client - Automatic Release Script\n\n";
+        echo "USAGE:\n";
+        echo "  php bin/release [command]\n\n";
+        echo "COMMANDS:\n";
+        echo "  --auto        Automatically determine version bump from commits\n";
+        echo "  patch         Manual patch version bump (1.0.0 → 1.0.1)\n";
+        echo "  minor         Manual minor version bump (1.0.0 → 1.1.0)\n";
+        echo "  major         Manual major version bump (1.0.0 → 2.0.0)\n";
+        echo "  --help, -h    Show this help message\n\n";
+        echo "EXAMPLES:\n";
+        echo "  php bin/release --auto\n";
+        echo "  php bin/release patch\n";
+    }
+
+    private function autoRelease(): void
+    {
+        echo "🔍 Analyzing commits for automatic version bump...\n\n";
+
+        $lastTag = $this->getLastTag();
+        $lastVersion = $this->parseVersion($lastTag);
+
+        echo "Last tag: $lastTag (version: $lastVersion)\n";
+
+        $commits = $this->getCommitsSinceTag($lastTag);
+        if (empty($commits)) {
+            echo "ℹ️  No new commits since last tag. Skipping release.\n";
+            return;
+        }
+
+        echo "📝 Found " . count($commits) . " commits since last tag:\n";
+        foreach ($commits as $commit) {
+            echo "  • $commit\n";
+        }
+        echo "\n";
+
+        $bumpType = $this->determineBumpType($commits);
+        echo "🎯 Determined bump type: $bumpType\n";
+
+        $newVersion = $this->calculateNewVersion($lastVersion, $bumpType);
+        echo "📦 New version: $newVersion\n\n";
+
+        if (!$this->confirmAction("Proceed with release v$newVersion?")) {
+            echo "❌ Release cancelled.\n";
+            return;
+        }
+
+        $this->performRelease($newVersion, $bumpType, $commits);
+    }
+
+    private function manualRelease(string $bumpType): void
+    {
+        $lastTag = $this->getLastTag();
+        $lastVersion = $this->parseVersion($lastTag);
+        $newVersion = $this->calculateNewVersion($lastVersion, $bumpType);
+
+        echo "📦 Manual $bumpType release\n";
+        echo "Current version: $lastVersion\n";
+        echo "New version: $newVersion\n\n";
+
+        if (!$this->confirmAction("Proceed with manual release v$newVersion?")) {
+            echo "❌ Release cancelled.\n";
+            return;
+        }
+
+        $this->performRelease($newVersion, $bumpType, []);
+    }
+
+    private function performRelease(string $newVersion, string $bumpType, array $commits): void
+    {
+        echo "🚀 Starting release process...\n\n";
+
+        // Update composer.json
+        echo "📝 Updating composer.json...\n";
+        $this->updateComposerJson($newVersion);
+
+        // Update CHANGELOG.md
+        echo "📝 Updating CHANGELOG.md...\n";
+        $this->updateChangelog($newVersion, $bumpType, $commits);
+
+        // Commit changes
+        echo "💾 Committing changes...\n";
+        $this->commitChanges($newVersion);
+
+        // Create tag
+        echo "🏷️  Creating git tag...\n";
+        $this->createTag($newVersion);
+
+        // Push changes
+        echo "📤 Pushing to remote...\n";
+        $this->pushChanges($newVersion);
+
+        echo "\n🎉 Release v$newVersion completed successfully!\n";
+        echo "📋 Next steps:\n";
+        echo "  • GitHub release will be created automatically\n";
+        echo "  • Packagist will be updated within a few minutes\n";
+        echo "  • Check: https://packagist.org/packages/imcanugur/fly-http\n";
+    }
+
+    private function getLastTag(): string
+    {
+        $output = shell_exec('git describe --tags --abbrev=0 2>/dev/null');
+        return trim($output ?: 'v0.0.0');
+    }
+
+    private function parseVersion(string $tag): string
+    {
+        return ltrim($tag, 'v');
+    }
+
+    private function getCommitsSinceTag(string $lastTag): array
+    {
+        $output = shell_exec("git log --oneline $lastTag..HEAD 2>/dev/null");
+        if (!$output) {
+            return [];
+        }
+
+        return array_map('trim', explode("\n", trim($output)));
+    }
+
+    private function determineBumpType(array $commits): string
+    {
+        foreach ($commits as $commit) {
+            // Breaking changes
+            if (preg_match('/BREAKING CHANGE|feat!|fix!|refactor!/', $commit)) {
+                return 'major';
+            }
+        }
+
+        foreach ($commits as $commit) {
+            // New features
+            if (preg_match('/^feat:/', $commit)) {
+                return 'minor';
+            }
+        }
+
+        // Default to patch for fixes and other changes
+        return 'patch';
+    }
+
+    private function calculateNewVersion(string $currentVersion, string $bumpType): string
+    {
+        [$major, $minor, $patch] = explode('.', $currentVersion);
+
+        switch ($bumpType) {
+            case 'major':
+                $major++;
+                $minor = 0;
+                $patch = 0;
+                break;
+            case 'minor':
+                $minor++;
+                $patch = 0;
+                break;
+            case 'patch':
+                $patch++;
+                break;
+        }
+
+        return "$major.$minor.$patch";
+    }
+
+    private function updateComposerJson(string $newVersion): void
+    {
+        $composerJson = json_decode(file_get_contents('composer.json'), true);
+        $composerJson['version'] = $newVersion;
+
+        file_put_contents('composer.json', json_encode($composerJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    }
+
+    private function updateChangelog(string $newVersion, string $bumpType, array $commits): void
+    {
+        $date = date('Y-m-d');
+        $sectionName = ucfirst($bumpType === 'major' ? 'Changed' : ($bumpType === 'minor' ? 'Added' : 'Fixed'));
+
+        $changelog = file_get_contents('CHANGELOG.md');
+
+        $newEntry = "## [$newVersion] - $date\n\n### $sectionName\n";
+
+        if (!empty($commits)) {
+            $newEntry .= "- $bumpType version bump from conventional commits\n";
+        } else {
+            $newEntry .= "- Manual $bumpType version bump\n";
+        }
+
+        $newEntry .= "\n";
+
+        // Insert after header
+        $lines = explode("\n", $changelog);
+        array_splice($lines, 6, 0, explode("\n", rtrim($newEntry, "\n")));
+
+        file_put_contents('CHANGELOG.md', implode("\n", $lines) . "\n");
+    }
+
+    private function commitChanges(string $newVersion): void
+    {
+        shell_exec('git add composer.json CHANGELOG.md');
+        shell_exec("git commit -m \"Bump version to $newVersion\"");
+    }
+
+    private function createTag(string $newVersion): void
+    {
+        shell_exec("git tag -a v$newVersion -m \"Release version $newVersion\"");
+    }
+
+    private function pushChanges(string $newVersion): void
+    {
+        shell_exec("git push $this->remote $this->mainBranch");
+        shell_exec("git push $this->remote v$newVersion");
+    }
+
+    private function confirmAction(string $message): bool
+    {
+        echo "$message (y/N): ";
+        $handle = fopen("php://stdin", "r");
+        $response = trim(fgets($handle));
+        fclose($handle);
+
+        return strtolower($response) === 'y' || strtolower($response) === 'yes';
+    }
+}
+
+// Run the script
+$release = new AutoRelease();
+$release->run(array_slice($argv, 1));

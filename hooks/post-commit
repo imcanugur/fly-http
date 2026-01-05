@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Fly HTTP Client - Post-commit hook for automatic releases
+# This hook runs after each commit to check if we should trigger a release
+
+# Only run on main branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+    exit 0
+fi
+
+# Check if this is a merge commit (skip for merges)
+if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+    echo "Merge commit detected, skipping auto-release"
+    exit 0
+fi
+
+# Check if commit message contains [skip release] or similar
+COMMIT_MSG=$(git log -1 --pretty=%B)
+if echo "$COMMIT_MSG" | grep -q "\[skip release\]\|\[no release\]"; then
+    echo "Release skipped due to commit message marker"
+    exit 0
+fi
+
+# Check if we're in CI environment (avoid running locally)
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    echo "CI environment detected, release will be handled by CI pipeline"
+    exit 0
+fi
+
+# Ask user if they want to trigger a release
+echo ""
+echo "🤖 Fly HTTP Client - Auto Release Hook"
+echo "====================================="
+echo ""
+echo "This commit was made to the main branch."
+echo ""
+
+read -p "Would you like to trigger an automatic release? (y/N): " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Release cancelled. Use 'php bin/release --auto' manually if needed."
+    exit 0
+fi
+
+echo "🚀 Starting automatic release process..."
+echo ""
+
+# Run the release script
+if [ -f "bin/release" ]; then
+    php bin/release --auto
+else
+    echo "❌ Release script not found at bin/release"
+    echo "Make sure you're in the project root directory"
+    exit 1
+fi

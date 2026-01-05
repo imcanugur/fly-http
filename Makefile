@@ -54,12 +54,30 @@ dev-server: ## Start development server (if applicable)
 validate: ## Validate composer.json
 	composer validate
 
-# Release
-release-patch: ## Create patch release
-	@echo "Release process not automated yet"
+# Release (CI-Independent)
+release-auto: ## Automatic release based on conventional commits
+	php bin/release --auto
 
-release-minor: ## Create minor release
-	@echo "Release process not automated yet"
+release-patch: ## Create patch release (1.0.0 → 1.0.1)
+	php bin/release patch
 
-release-major: ## Create major release
-	@echo "Release process not automated yet"
+release-minor: ## Create minor release (1.0.0 → 1.1.0)
+	php bin/release minor
+
+release-major: ## Create major release (1.0.0 → 2.0.0)
+	php bin/release major
+
+# Git Hooks
+setup-hooks: ## Install git hooks for automatic versioning
+	php bin/setup-hooks
+
+# Development Helpers
+commit-check: ## Check if current commit follows conventional format
+	@echo "Checking last commit message..."
+	@COMMIT_MSG=$$(git log -1 --pretty=%B); \
+	if echo "$$COMMIT_MSG" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+\))?!?:\s"; then \
+		echo "✅ Conventional commit format detected"; \
+	else \
+		echo "⚠️  Non-conventional commit format"; \
+		echo "Use: type: description (feat, fix, docs, etc.)"; \
+	fi

@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Fly HTTP Client - Prepare commit message hook
+# This hook helps enforce conventional commit format
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Skip if this is a merge, squash, or amend
+if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ] || [ "$COMMIT_SOURCE" = "commit" ]; then
+    exit 0
+fi
+
+# Read the commit message
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Check if it already follows conventional commit format
+if echo "$COMMIT_MSG" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+\))?!?:\s"; then
+    # Already conventional, do nothing
+    exit 0
+fi
+
+# Check for common non-conventional patterns
+if echo "$COMMIT_MSG" | grep -qE "^(Add|Update|Fix|Remove|Change|Improve|Refactor)"; then
+    echo ""
+    echo "⚠️  Non-conventional commit message detected!"
+    echo ""
+    echo "This project uses Conventional Commits for automatic versioning."
+    echo "Please use one of these formats:"
+    echo ""
+    echo "  feat: add new feature           (minor version bump)"
+    echo "  fix: resolve bug                (patch version bump)"
+    echo "  docs: update documentation      (no version bump)"
+    echo "  refactor: code improvement      (no version bump)"
+    echo "  perf: performance improvement   (patch version bump)"
+    echo "  test: add/update tests          (no version bump)"
+    echo "  build: build system changes     (no version bump)"
+    echo "  ci: CI/CD changes              (no version bump)"
+    echo "  chore: maintenance tasks        (no version bump)"
+    echo ""
+    echo "For breaking changes, add '!' after type:"
+    echo "  feat!: breaking change          (major version bump)"
+    echo ""
+    echo "Examples:"
+    echo "  'feat: add circuit breaker middleware'"
+    echo "  'fix: resolve memory leak in cache'"
+    echo "  'docs: update installation guide'"
+    echo ""
+    echo "Current message: '$COMMIT_MSG'"
+    echo ""
+    read -p "Continue with non-conventional message? (y/N): " -n 1 -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Commit cancelled. Please write a conventional commit message."
+        exit 1
+    fi
+fi
+
+# If we get here, allow the commit
+exit 0
