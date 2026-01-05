@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, development ]
+  pull_request:
+    branches: [ master, development ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+        include:
+          - php: '8.3'
+            coverage: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php }}
+        extensions: curl, mbstring, zip
+        coverage: pcov
+
+    - name: Validate composer.json
+      run: composer validate
+
+    - name: Install dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Run tests
+      run: ./vendor/bin/phpunit --no-coverage
+      if: matrix.coverage != true
+
+    - name: Run tests with coverage
+      run: ./vendor/bin/phpunit --coverage-clover=coverage.xml
+      if: matrix.coverage == true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.coverage == true
+      with:
+        file: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: curl, mbstring, zip
+
+    - name: Install dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Check code style
+      run: ./vendor/bin/pint --test
+
+  analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: curl, mbstring, zip
+
+    - name: Install dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Run PHPStan
+      run: ./vendor/bin/phpstan analyse src --level=8
+      if: hashFiles('phpstan.neon') != ''
+
+  release:
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: curl, mbstring, zip
+
+    - name: Install dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Run tests
+      run: ./vendor/bin/phpunit
+
+    - name: Create release archive
+      run: |
+        mkdir -p dist
+        composer archive --format=zip --file=fly-http
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: fly-http-release
+        path: dist/
