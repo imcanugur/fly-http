@@ -9,6 +9,8 @@ use Fly\Http\Middleware\AuthMiddleware;
 use Fly\Http\Middleware\RetryMiddleware;
 use Fly\Http\Transport\MockTransport;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
 
 class ClientIntegrationTest extends TestCase
 {
@@ -17,7 +19,7 @@ class ClientIntegrationTest extends TestCase
         $transport = new MockTransport();
 
         // Setup mock response
-        $mockResponse = $this->createMock(\Psr\Http\Message\ResponseInterface::class);
+        $mockResponse = $this->createMock(ResponseInterface::class);
         $transport->addResponse($mockResponse);
 
         $client = new Client($transport);
@@ -26,7 +28,7 @@ class ClientIntegrationTest extends TestCase
         $client->addMiddleware(new AuthMiddleware('test-token'));
         $client->addMiddleware(new RetryMiddleware(2, 0.1));
 
-        $request = $this->createMock(\Psr\Http\Message\RequestInterface::class);
+        $request = $this->createMock(RequestInterface::class);
 
         $response = $client->sendRequest($request);
 
@@ -43,14 +45,14 @@ class ClientIntegrationTest extends TestCase
 
         // Setup response factory
         $transport->setResponseFactory(function ($request) {
-            $response = $this->createMock(\Psr\Http\Message\ResponseInterface::class);
+            $response = $this->createMock(ResponseInterface::class);
             $response->method('getStatusCode')->willReturn(200);
             return $response;
         });
 
         $client = new Client($transport);
 
-        $request = $this->createMock(\Psr\Http\Message\RequestInterface::class);
+        $request = $this->createMock(RequestInterface::class);
 
         $response = $client->sendRequest($request);
 
@@ -67,7 +69,7 @@ class ClientIntegrationTest extends TestCase
         $client = new Client($transport);
 
         // Create a request mock with proper methods
-        $request = $this->createMock(\Psr\Http\Message\RequestInterface::class);
+        $request = $this->createMock(RequestInterface::class);
         $request->method('getMethod')->willReturn('POST');
         $request->method('getUri')->willReturn(new class {
             public function __toString() { return 'https://api.example.com/users'; }
@@ -96,7 +98,7 @@ class ClientIntegrationTest extends TestCase
 
         // Create middlewares that track execution order
         $middleware1 = new class($executionOrder) {
-            private array &$order;
+            private array $order;
             public function __construct(array &$order) {
                 $this->order = &$order;
             }
@@ -109,7 +111,7 @@ class ClientIntegrationTest extends TestCase
         };
 
         $middleware2 = new class($executionOrder) {
-            private array &$order;
+            private array $order;
             public function __construct(array &$order) {
                 $this->order = &$order;
             }
@@ -124,7 +126,7 @@ class ClientIntegrationTest extends TestCase
         $client->addMiddleware($middleware1);
         $client->addMiddleware($middleware2);
 
-        $request = $this->createMock(\Psr\Http\Message\RequestInterface::class);
+        $request = $this->createMock(RequestInterface::class);
         $client->sendRequest($request);
 
         // Middlewares should execute in reverse order (LIFO)

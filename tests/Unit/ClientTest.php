@@ -60,18 +60,26 @@ class ClientTest extends TestCase
             ->method('sendRequest')
             ->willReturn($response);
 
-        $middleware1 = new class {
-            public $executed = false;
+        $executionOrder = [];
+
+        $middleware1 = new class($executionOrder) {
+            private array &$order;
+            public function __construct(array &$order) {
+                $this->order = &$order;
+            }
             public function process(RequestInterface $request, callable $next): ResponseInterface {
-                $this->executed = true;
+                $this->order[] = 'middleware1';
                 return $next($request);
             }
         };
 
-        $middleware2 = new class {
-            public $executed = false;
+        $middleware2 = new class($executionOrder) {
+            private array &$order;
+            public function __construct(array &$order) {
+                $this->order = &$order;
+            }
             public function process(RequestInterface $request, callable $next): ResponseInterface {
-                $this->executed = true;
+                $this->order[] = 'middleware2';
                 return $next($request);
             }
         };
@@ -82,7 +90,7 @@ class ClientTest extends TestCase
 
         $client->sendRequest($request);
 
-        $this->assertTrue($middleware1->executed);
-        $this->assertTrue($middleware2->executed);
+        // Middlewares execute in reverse order due to pipeline
+        $this->assertEquals(['middleware1', 'middleware2'], $executionOrder);
     }
 }

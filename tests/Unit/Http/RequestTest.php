@@ -40,12 +40,12 @@ class RequestTest extends TestCase
 
     public function testUri(): void
     {
-        $uri = new Uri('http://example.com/path');
+        $uri = new \Fly\Http\Http\Uri('http://example.com/path');
         $request = new Request('GET', $uri);
 
         $this->assertSame($uri, $request->getUri());
 
-        $newUri = new Uri('http://example.com/new-path');
+        $newUri = new \Fly\Http\Http\Uri('http://example.com/new-path');
         $newRequest = $request->withUri($newUri);
         $this->assertSame($newUri, $newRequest->getUri());
     }

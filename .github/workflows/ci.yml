@@ -33,7 +33,7 @@ jobs:
       run: composer install --no-progress --prefer-dist --optimize-autoloader
 
     - name: Run tests
-      run: ./vendor/bin/phpunit --testsuite Unit --testsuite Unit --no-coverage
+      run: ./vendor/bin/phpunit --testsuite Unit --no-coverage
       if: matrix.coverage != true
 
     - name: Run tests with coverage
@@ -86,7 +86,7 @@ jobs:
   release:
     needs: [test, lint]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
 
     steps:
     - uses: actions/checkout@v4
